@@ -3,11 +3,30 @@ import random
 from pymongo import MongoClient
 import pandas as pd
 
-# --- MongoDB Setup ---
-client = MongoClient("mongodb+srv://streamlit:ligma@anime-cluster.tgb1j32.mongodb.net/?retryWrites=true&w=majority")
-db = client["AnimeDatabase"]
-collection = db["Anime"]
-df = pd.DataFrame(collection.find())
+# --- Page Setup ---
+st.set_page_config(page_title="🎯 Anime Match Survey", layout="wide")
+
+# --- MongoDB Connection (with caching) ---
+@st.cache_data
+def load_anime_data():
+    try:
+        client = MongoClient("mongodb+srv://streamlit:ligma@anime-cluster.tgb1j32.mongodb.net/?retryWrites=true&w=majority")
+        db = client["AnimeDatabase"]
+        collection = db["Anime"]
+        data = list(collection.find())
+        return data
+    except Exception as e:
+        st.error(f"❌ Failed to connect to MongoDB: {e}")
+        return []
+
+# --- Load Data ---
+anime_data = load_anime_data()
+if not anime_data:
+    st.stop()
+
+df = pd.DataFrame(anime_data)
+if "_id" in df.columns:
+    df.drop(columns=["_id"], inplace=True)
 
 # --- Title ---
 st.title("📋 Find Your Anime Match")
@@ -35,7 +54,6 @@ if submitted:
     # Build a tag pool based on answers
     tags = []
 
-    # Match answers to traits
     if q1 == "Wholesome": tags += ["Slice of Life", "Romance"]
     if q1 == "Dark": tags += ["Psychological", "Drama"]
     if q1 == "Adventurous": tags += ["Action", "Adventure"]
@@ -44,19 +62,19 @@ if submitted:
 
     if q2 == "Yes": tags += ["Psychological", "Thriller"]
     if q2 == "Somewhat": tags += ["Drama"]
-    
+
     if q3 == "High": tags += ["Action", "Shounen"]
     if q3 == "Medium": tags += ["Fantasy"]
-    
+
     if q4 == "Love it": tags += ["Romance", "Drama"]
     if q4 == "A little": tags += ["Slice of Life"]
-    
+
     if q5 == "Chaotic": tags += ["Comedy"]
     if q5 == "Slice-of-life": tags += ["Slice of Life"]
-    
+
     if q6 == "Love it": tags += ["Seinen", "Psychological"]
     if q6 == "Some": tags += ["Action"]
-    
+
     if q7 == "Fantasy": tags += ["Fantasy"]
     if q7 == "Sci-fi": tags += ["Sci-Fi"]
     if q7 == "Historical": tags += ["Historical"]
@@ -64,7 +82,7 @@ if submitted:
 
     if q8 == "Yes": tags += ["Supernatural", "Magic"]
     if q8 == "Maybe": tags += ["Fantasy"]
-    
+
     if q9 == "Anti-hero": tags += ["Seinen"]
     if q9 == "Friend group": tags += ["Shounen"]
     if q9 == "Overpowered": tags += ["Action"]
@@ -74,18 +92,18 @@ if submitted:
     matched = df[df["genres"].str.contains(tag_pattern, na=False, case=False)]
 
     if matched.empty:
-        st.warning("Sorry! No matching anime found 😢 Try adjusting your answers.")
+        st.warning("😢 Sorry! No matching anime found. Try adjusting your answers.")
     else:
         anime = matched.sample(1).iloc[0]
         st.success("✨ Here's your match!")
         st.markdown(
             f"""
             <div style='text-align: center;'>
-                <img src="{anime['image_url']}" width="300"><br><br>
-                <h3>{anime['english_name'] or anime['name']}</h3>
-                <p style='font-size:18px;'>{anime['japanese_names']}</p>
-                <p style='font-size:16px;'>Genres: {anime['genres']}</p>
-                <p style='font-size:14px;'>{anime['synopsis'][:300]}...</p>
+                <img src="{anime.get('image_url', '')}" width="300"><br><br>
+                <h3>{anime.get('english_name') or anime.get('name')}</h3>
+                <p style='font-size:18px;'>{anime.get('japanese_names', '')}</p>
+                <p style='font-size:16px;'>Genres: {anime.get('genres', 'Unknown')}</p>
+                <p style='font-size:14px;'>{anime.get('synopsis', 'No synopsis available')[:300]}...</p>
             </div>
             """,
             unsafe_allow_html=True
